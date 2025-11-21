@@ -1,23 +1,49 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.schemas.user_schema import UserLogin
+from app.schemas.user_schema import UserCreate, UserLogin, UserResponse
 from app.models.user_model import UserDB
-from app.utils.seguridad import verificar_password
 from app.utils.dependencias import get_db
 
-router = APIRouter(prefix="/auth", tags=["Login"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+# -------------------------------
+#   REGISTRO
+# -------------------------------
+@router.post("/register", response_model=UserResponse)
+def register(user: UserCreate, db: Session = Depends(get_db)):
+
+    # Verificar si el usuario ya existe
+    existing_user = db.query(UserDB).filter(
+        (UserDB.username == user.username) | (UserDB.email == user.email)
+    ).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="El usuario o email ya existe")
+
+    new_user = UserDB(
+        username=user.username,
+        email=user.email,
+        password=user.password  # (luego podemos encriptarla)
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
+
+
+# -------------------------------
+#   LOGIN
+# -------------------------------
 @router.post("/login")
-def login(datos: UserLogin, db: Session = Depends(get_db)):
+def login(user: UserLogin, db: Session = Depends(get_db)):
 
-    user = db.query(UserDB).filter(UserDB.nickname == datos.nickname).first()
+    db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
 
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if not db_user or db_user.password != user.password:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    if not verificar_password(datos.password, user.password):
-        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
-
-    return {"mensaje": "Login exitoso"}
+    return {"success": True}

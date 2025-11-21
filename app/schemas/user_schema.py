@@ -1,24 +1,18 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
-
-# ======== ESQUEMA PARA REGISTRO ==========
 class UserCreate(BaseModel):
     username: str
-    email: EmailStr
+    email: str
     password: str
 
-
-# ======== ESQUEMA PARA LOGIN ==========
 class UserLogin(BaseModel):
     username: str
     password: str
 
-
-# ======== RESPUESTA PARA LA API ==========
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: EmailStr
+    email: str
 
     class Config:
-        from_attributes = True
+        orm_mode = True

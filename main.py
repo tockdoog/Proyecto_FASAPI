@@ -18,7 +18,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Escuela")
 
-# Archivos estáticos
+# Archivos estáticos (CSS, JS, imágenes)
 app.mount("/public", StaticFiles(directory="public"), name="public")
 
 # Incluir routers
@@ -31,3 +31,8 @@ app.include_router(auth_router)
 @app.get("/")
 def root():
     return FileResponse("public/frontend/templates/login.html")
+
+# Página luego del login
+@app.get("/index")
+def index_page():
+    return FileResponse("public/frontend/templates/index.html")
