@@ -1,22 +1,23 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from fastapi.responses import JSONResponse
 
+from app.schemas.user_schema import UserLogin
+from app.models.user_model import UserDB
+from app.utils.seguridad import verificar_password
 from app.utils.dependencias import get_db
-from app.models.user_models import UserDB
-from app.schemas.user_shema import UserLogin
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(prefix="/auth", tags=["Login"])
+
 
 @router.post("/login")
-def login(usuario: UserLogin, db: Session = Depends(get_db)):
+def login(datos: UserLogin, db: Session = Depends(get_db)):
 
-    user = db.query(UserDB).filter(UserDB.nickname == usuario.nickname).first()
+    user = db.query(UserDB).filter(UserDB.nickname == datos.nickname).first()
 
     if not user:
-        raise HTTPException(status_code=400, detail="Usuario no encontrado")
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if user.password != usuario.password:
-        raise HTTPException(status_code=400, detail="Contraseña incorrecta")
+    if not verificar_password(datos.password, user.password):
+        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
-    return JSONResponse({"mensaje": "Login exitoso"})
+    return {"mensaje": "Login exitoso"}
