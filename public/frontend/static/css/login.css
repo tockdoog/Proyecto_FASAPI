@@ -1,5 +1,4 @@
-
-    * {
+        * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -11,7 +10,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #667eea 0%, #6b26b1 100%);
             position: relative;
             overflow: hidden;
         }
@@ -26,8 +25,8 @@
                     45deg,
                     transparent,
                     transparent 35px,
-                    rgba(255, 255, 255, 0.05) 35px,
-                    rgba(255, 255, 255, 0.05) 70px
+                    rgba(255, 0, 0, 0.05) 35px,
+                    rgba(76, 175, 57, 0.05) 70px
                 );
             animation: slide 20s linear infinite;
         }
