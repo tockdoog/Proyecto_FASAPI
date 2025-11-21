@@ -1,11 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Login & Register</title>
+   <link href="/public/frontend/static/css/login.css" >
 </head>
 <body>
-    <p>hola mundo</p>
+    <div class="container">
+        <!-- Formulario de Login -->
+        <div id="loginForm" class="form-section active">
+            <h2>Login</h2>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <span class="icon-user"></span>
+                    <input type="text" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <span class="icon-lock"></span>
+                    <input type="password" placeholder="Password" required>
+                </div>
+                <div class="remember-forgot">
+                    <label class="remember-me">
+                        <input type="checkbox">
+                        <span>Remember me</span>
+                    </label>
+                    <a href="#" class="forgot-password">Forgot your password?</a>
+
+                </div>
+                <button type="submit" class="btn-submit">Login</button>
+            </form>
+            <div class="toggle-form">
+                New here? <a href="#" onclick="toggleForms(event)">Sign Up</a>
+            </div>
+        </div>
+
+        <!-- Formulario de Registro -->
+        <div id="registerForm" class="form-section">
+            <h2>Sign Up</h2>
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <span class="icon-user"></span>
+                    <input type="text" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <span class="icon-email"></span>
+                    <input type="email" placeholder="Email" required>
+                </div>
+                <div class="form-group">
+                    <span class="icon-lock"></span>
+                    <input type="password" placeholder="Password" required>
+                </div>
+                <div class="form-group">
+                    <span class="icon-lock"></span>
+                    <input type="password" placeholder="Confirm Password" required>
+                </div>
+                <button type="submit" class="btn-submit">Sign Up</button>
+            </form>
+            <div class="toggle-form">
+                Already have an account? <a href="#" onclick="toggleForms(event)">Login</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleForms(event) {
+            event.preventDefault();
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            
+            loginForm.classList.toggle('active');
+            registerForm.classList.toggle('active');
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            // Aquí puedes agregar la validación con tu base de datos
+            alert('Login exitoso! Redireccionando...');
+            // Redirecciona a tu página principal
+            // window.location.href = 'tu-pagina-principal.html';
+        }
+
+        function handleRegister(event) {
+            event.preventDefault();
+            const password = event.target.querySelector('input[placeholder="Password"]').value;
+            const confirmPassword = event.target.querySelector('input[placeholder="Confirm Password"]').value;
+            
+            if (password !== confirmPassword) {
+                alert('Las contraseñas no coinciden');
+                return;
+            }
+            
+            // Aquí puedes agregar la lógica para guardar en tu base de datos
+            alert('Registro exitoso! Redireccionando...');
+            // Redirecciona a tu página principal
+            // window.location.href = 'tu-pagina-principal.html';
+        }
+    </script>
 </body>
 </html>
