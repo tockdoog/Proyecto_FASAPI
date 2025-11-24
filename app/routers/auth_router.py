@@ -53,3 +53,16 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     return {"message": "Login exitoso", "username": user.username}
+
+
+@router.delete("/delete/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(UserDB).filter(UserDB.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "Usuario eliminado correctamente"}
