@@ -1,290 +1,589 @@
 /* =============================
-   Configuración general
+   Configuración y Constantes
 ============================= */
 const API_URL = "http://127.0.0.1:8000";
-
-// Contenedor para toasts (mensajes no bloqueantes)
-function ensureToastContainer() {
-    let container = document.getElementById('app-toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'app-toast-container';
-        container.style.position = 'fixed';
-        container.style.right = '18px';
-        container.style.bottom = '18px';
-        container.style.zIndex = 9999;
-        document.body.appendChild(container);
-    }
-    return container;
-}
-
-function showMessage(type, text, timeout = 3500) {
-    const container = ensureToastContainer();
-    const toast = document.createElement('div');
-    toast.className = `app-toast app-toast-${type}`;
-    toast.style.minWidth = '220px';
-    toast.style.marginTop = '8px';
-    toast.style.padding = '10px 12px';
-    toast.style.borderRadius = '8px';
-    toast.style.color = '#fff';
-    toast.style.boxShadow = '0 6px 18px rgba(2,6,23,0.08)';
-    toast.style.fontSize = '0.95rem';
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity .18s, transform .18s';
-
-    if (type === 'error') toast.style.background = '#dc3545';
-    else if (type === 'success') toast.style.background = '#16a34a';
-    else toast.style.background = '#2563eb';
-
-    toast.textContent = text;
-    container.appendChild(toast);
-
-    // appear
-    requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateY(-4px)';
-    });
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(0)';
-        setTimeout(() => container.removeChild(toast), 220);
-    }, timeout);
-}
+const TOAST_TIMEOUT = 4000;
+const LOADING_DELAY = 300;
 
 /* =============================
-   Funciones genéricas
+   Sistema de Notificaciones Toast
 ============================= */
-async function apiRequest(endpoint, method = "GET", data = null) {
-    try {
-        const cleanBase = API_URL.replace(/\/+$| \/+$/g, '');
-        const cleanEndpoint = endpoint.replace(/^\/+/, '');
-        const url = `${cleanBase}/${cleanEndpoint}`;
-
-        const options = { method, headers: {} };
-        if (data) {
-            options.headers['Content-Type'] = 'application/json';
-            options.body = JSON.stringify(data);
-        }
-
-        const res = await fetch(url, options);
-
-        // No content
-        if (res.status === 204) return { status: 204 };
-
-        const text = await res.text();
-        let parsed = null;
-        try { parsed = text ? JSON.parse(text) : null; } catch (e) { parsed = text; }
-
-        if (!res.ok) {
-            const msg = (parsed && (parsed.detail || parsed.mensaje || parsed.error)) || `Error ${res.status}`;
-            throw new Error(msg);
-        }
-
-        return parsed;
-    } catch (error) {
-        showMessage('error', `Error de conexión: ${error.message}`);
-        console.error(error);
-        return null;
+class ToastManager {
+    constructor() {
+        this.container = this.createContainer();
     }
-}
 
-function llenarTabla(selector, data, campos, cargarFn, eliminarFn) {
-    const tabla = document.querySelector(selector + " tbody");
-    tabla.innerHTML = "";
+    createContainer() {
+        let container = document.getElementById('app-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'app-toast-container';
+            document.body.appendChild(container);
+        }
+        return container;
+    }
 
-    data.forEach(item => {
-        const fila = document.createElement("tr");
+    show(type, message, duration = TOAST_TIMEOUT) {
+        const toast = document.createElement('div');
+        toast.className = `app-toast app-toast-${type}`;
+        toast.textContent = message;
+        
+        this.container.appendChild(toast);
 
-        // Agregar columnas de datos
-        campos.forEach(campo => {
-            const td = document.createElement("td");
-            td.textContent = item[campo];
-            fila.appendChild(td);
+        // Animación de entrada
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
         });
 
-        // Columna de acciones
-        const tdAcciones = document.createElement("td");
+        // Auto-remover
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    this.container.removeChild(toast);
+                }
+            }, 300);
+        }, duration);
+    }
 
-        // Botón Editar
-        const btnEditar = document.createElement("button");
-        btnEditar.className = "btn btn-sm btn-success me-1";
-        btnEditar.setAttribute('aria-label', 'Editar');
-        btnEditar.innerHTML = `<i class="bi bi-pencil-square"></i>`;
-        btnEditar.addEventListener("click", () => cargarFn(item));
+    success(message) {
+        this.show('success', message);
+    }
 
-        // Botón Eliminar
-        const btnEliminar = document.createElement("button");
-        btnEliminar.className = "btn btn-sm btn-danger";
-        btnEliminar.setAttribute('aria-label', 'Eliminar');
-        btnEliminar.innerHTML = `<i class="bi bi-trash"></i>`;
-        btnEliminar.addEventListener("click", () => eliminarFn(item.id));
+    error(message) {
+        this.show('error', message);
+    }
 
-        tdAcciones.appendChild(btnEditar);
-        tdAcciones.appendChild(btnEliminar);
-        fila.appendChild(tdAcciones);
-
-        tabla.appendChild(fila);
-    });
+    info(message) {
+        this.show('info', message);
+    }
 }
 
-function obtenerValores(inputs) {
-    const datos = {};
-    inputs.forEach(input => {
-        const el = document.getElementById(input);
-        if (!el) return;
-        const key = input.split("-")[1];
-        const raw = (el.value || '').toString().trim();
-        if (el.type === 'number') {
-            datos[key] = raw === '' ? null : parseInt(raw, 10);
-        } else {
-            datos[key] = raw;
+const toast = new ToastManager();
+
+/* =============================
+   Utilidades de API
+============================= */
+class APIClient {
+    constructor(baseURL) {
+        this.baseURL = baseURL.replace(/\/+$/, '');
+    }
+
+    async request(endpoint, method = 'GET', data = null) {
+        try {
+            const url = `${this.baseURL}/${endpoint.replace(/^\//, '')}`;
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(url, options);
+
+            // Manejo de respuesta vacía (204)
+            if (response.status === 204) {
+                return { success: true };
+            }
+
+            const text = await response.text();
+            let result = null;
+
+            try {
+                result = text ? JSON.parse(text) : null;
+            } catch (e) {
+                result = text;
+            }
+
+            if (!response.ok) {
+                const errorMessage = result?.detail || result?.mensaje || result?.error || `Error ${response.status}`;
+                throw new Error(errorMessage);
+            }
+
+            return result;
+        } catch (error) {
+            console.error('API Error:', error);
+            toast.error(`Error: ${error.message}`);
+            throw error;
         }
-    });
-    return datos;
+    }
+
+    get(endpoint) {
+        return this.request(endpoint, 'GET');
+    }
+
+    post(endpoint, data) {
+        return this.request(endpoint, 'POST', data);
+    }
+
+    put(endpoint, data) {
+        return this.request(endpoint, 'PUT', data);
+    }
+
+    delete(endpoint) {
+        return this.request(endpoint, 'DELETE');
+    }
 }
 
-function asignarValores(inputs, values) {
-    inputs.forEach(input => {
-        const el = document.getElementById(input);
-        if (!el) return;
-        const key = input.split("-")[1];
-        el.value = values[key] !== undefined && values[key] !== null ? values[key] : '';
-    });
+const api = new APIClient(API_URL);
+
+/* =============================
+   Utilidades de Tabla
+============================= */
+class TableManager {
+    constructor(selector, columns, editCallback, deleteCallback) {
+        this.table = document.querySelector(selector);
+        this.tbody = this.table?.querySelector('tbody');
+        this.columns = columns;
+        this.editCallback = editCallback;
+        this.deleteCallback = deleteCallback;
+    }
+
+    showLoading() {
+        if (!this.tbody) return;
+        this.tbody.innerHTML = `
+            <tr class="loading-row">
+                <td colspan="${this.columns.length + 1}" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    showEmpty(message = 'No hay registros disponibles') {
+        if (!this.tbody) return;
+        this.tbody.innerHTML = `
+            <tr>
+                <td colspan="${this.columns.length + 1}" class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                    <p class="mt-2 mb-0">${message}</p>
+                </td>
+            </tr>
+        `;
+    }
+
+    render(data) {
+        if (!this.tbody) return;
+
+        if (!data || data.length === 0) {
+            this.showEmpty();
+            return;
+        }
+
+        this.tbody.innerHTML = '';
+
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            
+            // Agregar columnas de datos
+            this.columns.forEach(column => {
+                const td = document.createElement('td');
+                const value = item[column];
+                td.textContent = value !== null && value !== undefined ? value : '-';
+                row.appendChild(td);
+            });
+
+            // Agregar columna de acciones
+            const tdActions = document.createElement('td');
+            tdActions.className = 'text-center';
+            tdActions.innerHTML = `
+                <button class="btn btn-sm btn-success me-1" data-action="edit" title="Editar">
+                    <i class="bi bi-pencil-square"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" data-action="delete" title="Eliminar">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+
+            // Event listeners para botones
+            tdActions.querySelector('[data-action="edit"]').addEventListener('click', () => {
+                this.editCallback(item);
+            });
+
+            tdActions.querySelector('[data-action="delete"]').addEventListener('click', () => {
+                this.deleteCallback(item.id);
+            });
+
+            row.appendChild(tdActions);
+            this.tbody.appendChild(row);
+        });
+    }
 }
 
 /* =============================
-   CRUD ESTUDIANTES
+   Utilidades de Formulario
 ============================= */
-async function agregarEstudiante() {
-    const datos = obtenerValores(["est-nombre", "est-edad", "est-carrera"]);
-    // Validación básica
-    if (!datos.nombre) return showMessage('error', 'Nombre es requerido');
-    const res = await apiRequest("estudiantes", "POST", datos);
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    limpiarFormulario('est');
-    listarEstudiantes();
+class FormManager {
+    constructor(prefix, fields) {
+        this.prefix = prefix;
+        this.fields = fields;
+    }
+
+    getValues() {
+        const values = {};
+        this.fields.forEach(field => {
+            const element = document.getElementById(`${this.prefix}-${field}`);
+            if (!element) return;
+
+            const value = element.value.trim();
+            
+            if (element.type === 'number') {
+                values[field] = value === '' ? null : parseInt(value, 10);
+            } else {
+                values[field] = value;
+            }
+        });
+        return values;
+    }
+
+    setValues(data) {
+        this.fields.forEach(field => {
+            const element = document.getElementById(`${this.prefix}-${field}`);
+            if (!element) return;
+
+            const value = data[field];
+            element.value = value !== null && value !== undefined ? value : '';
+        });
+    }
+
+    clear() {
+        this.fields.forEach(field => {
+            const element = document.getElementById(`${this.prefix}-${field}`);
+            if (!element || element.type === 'hidden') return;
+            element.value = '';
+        });
+        
+        // Limpiar ID oculto
+        const idElement = document.getElementById(`${this.prefix}-id`);
+        if (idElement) idElement.value = '';
+    }
+
+    validate() {
+        const values = this.getValues();
+        const errors = [];
+
+        this.fields.forEach(field => {
+            const element = document.getElementById(`${this.prefix}-${field}`);
+            if (!element || !element.required) return;
+
+            const value = values[field];
+            if (!value && value !== 0) {
+                errors.push(`El campo ${element.placeholder || field} es requerido`);
+            }
+        });
+
+        return {
+            valid: errors.length === 0,
+            errors
+        };
+    }
+
+    getId() {
+        const idElement = document.getElementById(`${this.prefix}-id`);
+        return idElement ? idElement.value : null;
+    }
+
+    setId(id) {
+        const idElement = document.getElementById(`${this.prefix}-id`);
+        if (idElement) idElement.value = id;
+    }
 }
+
+/* =============================
+   CRUD: Estudiantes
+============================= */
+const estudiantesForm = new FormManager('est', ['nombre', 'edad', 'carrera']);
+const estudiantesTable = new TableManager(
+    '#tabla-est',
+    ['id', 'nombre', 'edad', 'carrera'],
+    cargarEstudiante,
+    eliminarEstudiante
+);
 
 async function listarEstudiantes() {
-    const data = await apiRequest("estudiantes");
-    if (!data) return;
-    llenarTabla("#tabla-est", data, ["id", "nombre", "edad", "carrera"], cargarEstudiante, eliminarEstudiante);
+    estudiantesTable.showLoading();
+    try {
+        const data = await api.get('estudiantes');
+        setTimeout(() => estudiantesTable.render(data), LOADING_DELAY);
+    } catch (error) {
+        estudiantesTable.showEmpty('Error al cargar estudiantes');
+    }
 }
 
-function cargarEstudiante(item) {
-    asignarValores(["est-nombre", "est-edad", "est-carrera"], { nombre: item.nombre, edad: item.edad, carrera: item.carrera });
-    const idEl = document.getElementById("est-id"); if (idEl) idEl.value = item.id;
+async function agregarEstudiante() {
+    const validation = estudiantesForm.validate();
+    if (!validation.valid) {
+        toast.error(validation.errors[0]);
+        return;
+    }
+
+    const data = estudiantesForm.getValues();
+    try {
+        const result = await api.post('estudiantes', data);
+        toast.success(result.mensaje || 'Estudiante agregado exitosamente');
+        estudiantesForm.clear();
+        listarEstudiantes();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
+}
+
+function cargarEstudiante(estudiante) {
+    estudiantesForm.setValues(estudiante);
+    estudiantesForm.setId(estudiante.id);
+    toast.info('Estudiante cargado. Modifica los datos y presiona Actualizar');
 }
 
 async function actualizarEstudiante() {
-    const id = document.getElementById("est-id").value;
-    if (!id) return showMessage('error', 'Seleccione un estudiante a actualizar');
-    const datos = obtenerValores(["est-nombre", "est-edad", "est-carrera"]);
-    const res = await apiRequest(`estudiantes/${id}`, "PUT", datos);
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    limpiarFormulario('est');
-    listarEstudiantes();
+    const id = estudiantesForm.getId();
+    if (!id) {
+        toast.error('Selecciona un estudiante para actualizar');
+        return;
+    }
+
+    const validation = estudiantesForm.validate();
+    if (!validation.valid) {
+        toast.error(validation.errors[0]);
+        return;
+    }
+
+    const data = estudiantesForm.getValues();
+    try {
+        const result = await api.put(`estudiantes/${id}`, data);
+        toast.success(result.mensaje || 'Estudiante actualizado exitosamente');
+        estudiantesForm.clear();
+        listarEstudiantes();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
 }
 
 async function eliminarEstudiante(id) {
-    if (!confirm(`¿Eliminar estudiante ${id}?`)) return;
-    const res = await apiRequest(`estudiantes/${id}`, "DELETE");
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    listarEstudiantes();
+    if (!confirm('¿Estás seguro de eliminar este estudiante?')) {
+        return;
+    }
+
+    try {
+        const result = await api.delete(`estudiantes/${id}`);
+        toast.success(result.mensaje || 'Estudiante eliminado exitosamente');
+        listarEstudiantes();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
 }
 
 /* =============================
-   CRUD PROFESORES
+   CRUD: Profesores
 ============================= */
-async function agregarProfesor() {
-    const datos = obtenerValores(["prof-nombre", "prof-edad", "prof-materia"]);
-    if (!datos.nombre) return showMessage('error', 'Nombre es requerido');
-    const res = await apiRequest("profesores", "POST", datos);
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    limpiarFormulario('prof');
-    listarProfesores();
-}
+const profesoresForm = new FormManager('prof', ['nombre', 'edad', 'materia']);
+const profesoresTable = new TableManager(
+    '#tabla-prof',
+    ['id', 'nombre', 'edad', 'materia'],
+    cargarProfesor,
+    eliminarProfesor
+);
 
 async function listarProfesores() {
-    const data = await apiRequest("profesores");
-    if (!data) return;
-    llenarTabla("#tabla-prof", data, ["id", "nombre", "edad", "materia"], cargarProfesor, eliminarProfesor);
+    profesoresTable.showLoading();
+    try {
+        const data = await api.get('profesores');
+        setTimeout(() => profesoresTable.render(data), LOADING_DELAY);
+    } catch (error) {
+        profesoresTable.showEmpty('Error al cargar profesores');
+    }
 }
 
-function cargarProfesor(item) {
-    asignarValores(["prof-nombre", "prof-edad", "prof-materia"], { nombre: item.nombre, edad: item.edad, materia: item.materia });
-    const idEl = document.getElementById("prof-id"); if (idEl) idEl.value = item.id;
+async function agregarProfesor() {
+    const validation = profesoresForm.validate();
+    if (!validation.valid) {
+        toast.error(validation.errors[0]);
+        return;
+    }
+
+    const data = profesoresForm.getValues();
+    try {
+        const result = await api.post('profesores', data);
+        toast.success(result.mensaje || 'Profesor agregado exitosamente');
+        profesoresForm.clear();
+        listarProfesores();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
+}
+
+function cargarProfesor(profesor) {
+    profesoresForm.setValues(profesor);
+    profesoresForm.setId(profesor.id);
+    toast.info('Profesor cargado. Modifica los datos y presiona Actualizar');
 }
 
 async function actualizarProfesor() {
-    const id = document.getElementById("prof-id").value;
-    if (!id) return showMessage('error', 'Seleccione un profesor a actualizar');
-    const datos = obtenerValores(["prof-nombre", "prof-edad", "prof-materia"]);
-    const res = await apiRequest(`profesores/${id}`, "PUT", datos);
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    limpiarFormulario('prof');
-    listarProfesores();
+    const id = profesoresForm.getId();
+    if (!id) {
+        toast.error('Selecciona un profesor para actualizar');
+        return;
+    }
+
+    const validation = profesoresForm.validate();
+    if (!validation.valid) {
+        toast.error(validation.errors[0]);
+        return;
+    }
+
+    const data = profesoresForm.getValues();
+    try {
+        const result = await api.put(`profesores/${id}`, data);
+        toast.success(result.mensaje || 'Profesor actualizado exitosamente');
+        profesoresForm.clear();
+        listarProfesores();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
 }
 
 async function eliminarProfesor(id) {
-    if (!confirm(`¿Eliminar profesor ${id}?`)) return;
-    const res = await apiRequest(`profesores/${id}`, "DELETE");
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    listarProfesores();
+    if (!confirm('¿Estás seguro de eliminar este profesor?')) {
+        return;
+    }
+
+    try {
+        const result = await api.delete(`profesores/${id}`);
+        toast.success(result.mensaje || 'Profesor eliminado exitosamente');
+        listarProfesores();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
 }
 
 /* =============================
-   CRUD CURSOS
+   CRUD: Cursos
 ============================= */
-async function agregarCurso() {
-    const datos = obtenerValores(["cur-titulo", "cur-creditos"]);
-    if (!datos.titulo) return showMessage('error', 'Título es requerido');
-    const res = await apiRequest("cursos", "POST", datos);
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    limpiarFormulario('cur');
-    listarCursos();
-}
+const cursosForm = new FormManager('cur', ['titulo', 'creditos']);
+const cursosTable = new TableManager(
+    '#tabla-cursos',
+    ['id', 'titulo', 'creditos'],
+    cargarCurso,
+    eliminarCurso
+);
 
 async function listarCursos() {
-    const data = await apiRequest("cursos");
-    if (!data) return;
-    llenarTabla("#tabla-cursos", data, ["id", "titulo", "creditos"], cargarCurso, eliminarCurso);
+    cursosTable.showLoading();
+    try {
+        const data = await api.get('cursos');
+        setTimeout(() => cursosTable.render(data), LOADING_DELAY);
+    } catch (error) {
+        cursosTable.showEmpty('Error al cargar cursos');
+    }
 }
 
-function cargarCurso(item) {
-    asignarValores(["cur-titulo", "cur-creditos"], { titulo: item.titulo, creditos: item.creditos });
-    const idEl = document.getElementById("cur-id"); if (idEl) idEl.value = item.id;
+async function agregarCurso() {
+    const validation = cursosForm.validate();
+    if (!validation.valid) {
+        toast.error(validation.errors[0]);
+        return;
+    }
+
+    const data = cursosForm.getValues();
+    try {
+        const result = await api.post('cursos', data);
+        toast.success(result.mensaje || 'Curso agregado exitosamente');
+        cursosForm.clear();
+        listarCursos();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
+}
+
+function cargarCurso(curso) {
+    cursosForm.setValues(curso);
+    cursosForm.setId(curso.id);
+    toast.info('Curso cargado. Modifica los datos y presiona Actualizar');
 }
 
 async function actualizarCurso() {
-    const id = document.getElementById("cur-id").value;
-    if (!id) return showMessage('error', 'Seleccione un curso a actualizar');
-    const datos = obtenerValores(["cur-titulo", "cur-creditos"]);
-    const res = await apiRequest(`cursos/${id}`, "PUT", datos);
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    limpiarFormulario('cur');
-    listarCursos();
+    const id = cursosForm.getId();
+    if (!id) {
+        toast.error('Selecciona un curso para actualizar');
+        return;
+    }
+
+    const validation = cursosForm.validate();
+    if (!validation.valid) {
+        toast.error(validation.errors[0]);
+        return;
+    }
+
+    const data = cursosForm.getValues();
+    try {
+        const result = await api.put(`cursos/${id}`, data);
+        toast.success(result.mensaje || 'Curso actualizado exitosamente');
+        cursosForm.clear();
+        listarCursos();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
 }
 
 async function eliminarCurso(id) {
-    if (!confirm(`¿Eliminar curso ${id}?`)) return;
-    const res = await apiRequest(`cursos/${id}`, "DELETE");
-    if (res && res.mensaje) showMessage('success', res.mensaje);
-    listarCursos();
+    if (!confirm('¿Estás seguro de eliminar este curso?')) {
+        return;
+    }
+
+    try {
+        const result = await api.delete(`cursos/${id}`);
+        toast.success(result.mensaje || 'Curso eliminado exitosamente');
+        listarCursos();
+    } catch (error) {
+        // Error ya manejado en APIClient
+    }
 }
 
 /* =============================
-   Helpers y Inicialización
+   Inicialización
 ============================= */
-function limpiarFormulario(prefix) {
-    const inputs = Array.from(document.querySelectorAll(`[id^="${prefix}-"]`));
-    inputs.forEach(i => { if (i.type !== 'hidden') i.value = ''; });
-}
-
-// Ejecutar listados al cargar el DOM
-window.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
+    // Cargar datos iniciales
     listarEstudiantes();
     listarProfesores();
     listarCursos();
+
+    // Mensaje de bienvenida
+    setTimeout(() => {
+        toast.info('Sistema CRUD cargado correctamente');
+    }, 500);
+
+    // Manejar cambios de tab para recargar datos
+    const tabs = document.querySelectorAll('.nav-link[data-bs-toggle="tab"]');
+    tabs.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', (event) => {
+            const target = event.target.getAttribute('data-bs-target');
+            
+            if (target === '#estudiantes-panel') {
+                listarEstudiantes();
+            } else if (target === '#profesores-panel') {
+                listarProfesores();
+            } else if (target === '#cursos-panel') {
+                listarCursos();
+            }
+        });
+    });
+});
+
+/* =============================
+   Utilidades Globales
+============================= */
+// Manejar errores globales
+window.addEventListener('error', (event) => {
+    console.error('Error global:', event.error);
+});
+
+// Manejar promesas rechazadas
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Promise rechazada:', event.reason);
 });
